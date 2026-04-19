@@ -44,22 +44,28 @@ function loadEmailData() {
   // Message ID for attachment retrieval
   emailData.messageId = item.itemId;
 
-  // Body (async)
-  item.body.getAsync(Office.CoercionType.Text, function (result) {
+  // Get HTML body first (preserves paragraph structure), then fall back to text
+  item.body.getAsync(Office.CoercionType.Html, function (result) {
     if (result.status === Office.AsyncResultStatus.Succeeded) {
-      var cleaned = cleanEmailBody(result.value);
+      emailData.body = result.value;
+      var cleaned = htmlToCleanText(result.value);
       emailData.bodyText = cleaned;
       var preview = cleaned.substring(0, 200);
       if (cleaned.length > 200) preview += "...";
       document.getElementById("emailBodyPreview").textContent = preview;
       document.getElementById("issueDesc").value = cleaned.substring(0, 2000);
-    }
-  });
-
-  // HTML body (for richer description)
-  item.body.getAsync(Office.CoercionType.Html, function (result) {
-    if (result.status === Office.AsyncResultStatus.Succeeded) {
-      emailData.body = result.value;
+    } else {
+      // Fallback to plain text
+      item.body.getAsync(Office.CoercionType.Text, function (textResult) {
+        if (textResult.status === Office.AsyncResultStatus.Succeeded) {
+          var cleaned = textResult.value;
+          emailData.bodyText = cleaned;
+          var preview = cleaned.substring(0, 200);
+          if (cleaned.length > 200) preview += "...";
+          document.getElementById("emailBodyPreview").textContent = preview;
+          document.getElementById("issueDesc").value = cleaned.substring(0, 2000);
+        }
+      });
     }
   });
 
@@ -247,30 +253,68 @@ function getFileIcon(filename) {
   return icons[ext] || "📎";
 }
 
+function htmlToCleanText(html) {
+  if (!html) return "";
+  var text = html;
+  // Convert block elements to line breaks
+  text = text.replace(/<br\s*\/?>/gi, "\n");
+  text = text.replace(/<\/p>/gi, "\n\n");
+  text = text.replace(/<\/div>/gi, "\n");
+  text = text.replace(/<\/h[1-6]>/gi, "\n\n");
+  text = text.replace(/<\/li>/gi, "\n");
+  text = text.replace(/<\/tr>/gi, "\n");
+  text = text.replace(/<hr[^>]*>/gi, "\n---\n");
+  // Strip all remaining HTML tags
+  text = text.replace(/<[^>]+>/g, "");
+  // Decode common HTML entities
+  text = text.replace(/&nbsp;/gi, " ");
+  text = text.replace(/&amp;/gi, "&");
+  text = text.replace(/&lt;/gi, "<");
+  text = text.replace(/&gt;/gi, ">");
+  text = text.replace(/&quot;/gi, '"');
+  text = text.replace(/&#39;/gi, "'");
+  text = text.replace(/&rsquo;/gi, "'");
+  text = text.replace(/&lsquo;/gi, "'");
+  text = text.replace(/&rdquo;/gi, '"');
+  text = text.replace(/&ldquo;/gi, '"');
+  text = text.replace(/&mdash;/gi, "—");
+  text = text.replace(/&ndash;/gi, "–");
+  // Clean up excessive whitespace but preserve intentional line breaks
+  text = text.replace(/[ \t]+/g, " ");
+  text = text.replace(/\n /g, "\n");
+  text = text.replace(/ \n/g, "\n");
+  text = text.replace(/\n{3,}/g, "\n\n");
+  return text.trim();
+}
+
 function cleanEmailBody(text) {
   if (!text) return "";
-  // Split on common reply/forward markers
-  var markers = [
-    /\n\s*From:.*\nSent:.*\nTo:/i,           // Outlook reply header
-    /\n\s*-{2,}\s*Original Message\s*-{2,}/i, // ---- Original Message ----
-    /\n\s*On .+wrote:\s*\n/i,                 // Gmail-style "On ... wrote:"
-    /\nGet Outlook for .*/i,                   // "Get Outlook for Android/iOS"
-    /\n\s*_{10,}/,                             // long underscores (signature divider)
-    /\n\s*-{10,}/,                             // long dashes (signature divider)
-  ];
   var body = text;
+  // Split on common reply/forward markers (with or without leading newline)
+  var markers = [
+    /\n?\s*From:\s*.+\n?\s*Sent:\s*.+\n?\s*To:/i,   // Outlook reply header
+    /From:\s*[^\n]*<[^>]+>\s*Sent:/i,                  // Inline "From: Name <email>Sent:"
+    /-{2,}\s*Original Message\s*-{2,}/i,               // ---- Original Message ----
+    /On .{10,80}wrote:\s*/i,                            // Gmail-style "On ... wrote:"
+    /Get Outlook for (Android|iOS|Mobile)/i,            // "Get Outlook for Android/iOS"
+    /_{10,}/,                                           // long underscores (signature divider)
+    /-{10,}/,                                           // long dashes (signature divider)
+    /Sent from my (iPhone|iPad|Galaxy|Android)/i,       // mobile signatures
+  ];
   for (var i = 0; i < markers.length; i++) {
     var match = body.search(markers[i]);
     if (match > 0) {
       body = body.substring(0, match);
     }
   }
-  // Trim signature block — cut at common patterns
+  // Trim signature block — cut at common sign-off patterns
   var sigMarkers = [
-    /\nThanks[,!]?\s*\n.*\|/i,               // "Thanks, Name | Title"
+    /Thanks[,!]?\s*\n?\s*[\w].*\|/i,                   // "Thanks, Name | Title"
+    /Thanks[,!]?\s*\n?\s*[\w].*\nD:/i,                 // "Thanks!\nKevin Kimball\nD: 603..."
     /\nRegards[,]?\s*\n/i,
     /\nBest[,]?\s*\n/i,
-    /\nSent from my /i,
+    /\nCheers[,]?\s*\n/i,
+    /\nThank you[,]?\s*\n/i,
   ];
   for (var j = 0; j < sigMarkers.length; j++) {
     var sigMatch = body.search(sigMarkers[j]);
