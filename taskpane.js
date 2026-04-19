@@ -5,7 +5,7 @@
 
 // ── CONFIGURATION ─────────────────────────────────────────────────
 // Replace this URL with your Power Automate "When an HTTP request is received" trigger URL
-const FLOW_ENDPOINT = "https://default5e8309eec8d04bc7b5b85a37a4eb10.7b.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/27e63548f67749afaff088af1e123a8b/triggers/manual/paths/invoke?api-version=1";
+const FLOW_ENDPOINT = "https://default5e8309eec8d04bc7b5b85a37a4eb10.7b.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/27e63548f67749afaff088af1e123a8b/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=sIJbuWBl4vFYUkY-4bUvl93tWZlEY6WL3y7dHpB-mLw";
 // ──────────────────────────────────────────────────────────────────
 
 let emailData = {
