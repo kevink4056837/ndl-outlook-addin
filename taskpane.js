@@ -195,7 +195,7 @@ function sendToFlow(meeting, title, desc, attachments) {
     meeting: meeting,
     title: title,
     description: desc,
-    htmlDescription: emailData.body || desc,
+    htmlDescription: sanitizeOutlookHtml(emailData.body) || desc,
     emailFrom: emailData.from,
     emailSubject: emailData.subject,
     createdBy: Office.context.mailbox.userProfile.displayName,
@@ -340,6 +340,85 @@ function htmlToCleanText(html) {
   text = text.replace(/ \n/g, "\n");
   text = text.replace(/\n{3,}/g, "\n\n");
   return text.trim();
+}
+
+// ── Sanitize Outlook HTML → clean simple HTML for SharePoint ─────
+function sanitizeOutlookHtml(rawHtml) {
+  if (!rawHtml) return "";
+  try {
+    var parser = new DOMParser();
+    var doc = parser.parseFromString(rawHtml, "text/html");
+
+    // Remove all <style> blocks
+    var styles = doc.querySelectorAll("style");
+    for (var i = 0; i < styles.length; i++) styles[i].remove();
+
+    // Remove all <script> blocks
+    var scripts = doc.querySelectorAll("script");
+    for (var i = 0; i < scripts.length; i++) scripts[i].remove();
+
+    // Remove <meta>, <link>, <title>
+    var junk = doc.querySelectorAll("meta, link, title");
+    for (var i = 0; i < junk.length; i++) junk[i].remove();
+
+    // Remove all comments
+    var walker = doc.createTreeWalker(doc.body || doc, NodeFilter.SHOW_COMMENT, null, false);
+    var comments = [];
+    while (walker.nextNode()) comments.push(walker.currentNode);
+    for (var i = 0; i < comments.length; i++) comments[i].remove();
+
+    // Strip class and style attributes from all elements, plus Office-specific attrs
+    var allEls = (doc.body || doc).querySelectorAll("*");
+    for (var i = 0; i < allEls.length; i++) {
+      allEls[i].removeAttribute("class");
+      allEls[i].removeAttribute("style");
+      allEls[i].removeAttribute("lang");
+      allEls[i].removeAttribute("dir");
+      // Remove data-* and o:* attributes
+      var attrs = allEls[i].attributes;
+      var toRemove = [];
+      for (var j = 0; j < attrs.length; j++) {
+        if (attrs[j].name.indexOf("data-") === 0 || attrs[j].name.indexOf("o:") === 0) {
+          toRemove.push(attrs[j].name);
+        }
+      }
+      for (var j = 0; j < toRemove.length; j++) allEls[i].removeAttribute(toRemove[j]);
+    }
+
+    // Remove empty <span>, <font>, <o:p> elements (keep content)
+    var unwrapTags = doc.querySelectorAll("span:empty, font, o\\:p");
+    for (var i = 0; i < unwrapTags.length; i++) {
+      var el = unwrapTags[i];
+      while (el.firstChild) el.parentNode.insertBefore(el.firstChild, el);
+      el.remove();
+    }
+
+    // Unwrap remaining <font> and <span> that just wrap text
+    var wrappers = (doc.body || doc).querySelectorAll("font, span");
+    for (var i = 0; i < wrappers.length; i++) {
+      var el = wrappers[i];
+      while (el.firstChild) el.parentNode.insertBefore(el.firstChild, el);
+      el.remove();
+    }
+
+    // Constrain images
+    var imgs = (doc.body || doc).querySelectorAll("img");
+    for (var i = 0; i < imgs.length; i++) {
+      imgs[i].setAttribute("style", "max-width:100%;height:auto;");
+    }
+
+    // Get the cleaned body HTML
+    var cleaned = (doc.body || doc).innerHTML || "";
+
+    // Clean up excessive whitespace
+    cleaned = cleaned.replace(/\n\s*\n\s*\n/g, "\n\n");
+    cleaned = cleaned.trim();
+
+    return cleaned;
+  } catch (e) {
+    console.warn("[NDL] HTML sanitize failed, using plain text fallback", e);
+    return htmlToCleanText(rawHtml);
+  }
 }
 
 function cleanEmailBody(text) {
