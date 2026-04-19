@@ -44,26 +44,30 @@ function loadEmailData() {
   // Message ID for attachment retrieval
   emailData.messageId = item.itemId;
 
-  // Get HTML body first (preserves paragraph structure), then fall back to text
+  // Get HTML body (preserves formatting + images)
   item.body.getAsync(Office.CoercionType.Html, function (result) {
     if (result.status === Office.AsyncResultStatus.Succeeded) {
       emailData.body = result.value;
-      var cleaned = htmlToCleanText(result.value);
-      emailData.bodyText = cleaned;
-      var preview = cleaned.substring(0, 200);
-      if (cleaned.length > 200) preview += "...";
+      // Build plain text preview for the task pane UI
+      var plainText = htmlToCleanText(result.value);
+      emailData.bodyText = plainText;
+      var preview = plainText.substring(0, 200);
+      if (plainText.length > 200) preview += "...";
       document.getElementById("emailBodyPreview").textContent = preview;
-      document.getElementById("issueDesc").value = cleaned.substring(0, 2000);
+      document.getElementById("issueDesc").value = plainText.substring(0, 2000);
+
+      // Resolve inline images (cid: references → base64 data URLs)
+      resolveInlineImages(item, function (resolvedHtml) {
+        emailData.body = resolvedHtml;
+      });
     } else {
-      // Fallback to plain text
       item.body.getAsync(Office.CoercionType.Text, function (textResult) {
         if (textResult.status === Office.AsyncResultStatus.Succeeded) {
-          var cleaned = textResult.value;
-          emailData.bodyText = cleaned;
-          var preview = cleaned.substring(0, 200);
-          if (cleaned.length > 200) preview += "...";
+          emailData.bodyText = textResult.value;
+          var preview = textResult.value.substring(0, 200);
+          if (textResult.value.length > 200) preview += "...";
           document.getElementById("emailBodyPreview").textContent = preview;
-          document.getElementById("issueDesc").value = cleaned.substring(0, 2000);
+          document.getElementById("issueDesc").value = textResult.value.substring(0, 2000);
         }
       });
     }
@@ -191,6 +195,7 @@ function sendToFlow(meeting, title, desc, attachments) {
     meeting: meeting,
     title: title,
     description: desc,
+    htmlDescription: emailData.body || desc,
     emailFrom: emailData.from,
     emailSubject: emailData.subject,
     createdBy: Office.context.mailbox.userProfile.displayName,
@@ -251,6 +256,56 @@ function getFileIcon(filename) {
     gif: "🖼️", zip: "📦", rar: "📦", txt: "📃", csv: "📊",
   };
   return icons[ext] || "📎";
+}
+
+// ── Resolve inline images: replace cid: with base64 data URLs ─────
+function resolveInlineImages(item, callback) {
+  var html = emailData.body;
+  var attachments = item.attachments;
+  if (!attachments || attachments.length === 0) {
+    callback(html);
+    return;
+  }
+
+  // Find inline attachments
+  var inlineAtts = [];
+  for (var i = 0; i < attachments.length; i++) {
+    if (attachments[i].isInline && attachments[i].contentType && attachments[i].contentType.indexOf("image") === 0) {
+      inlineAtts.push(attachments[i]);
+    }
+  }
+
+  if (inlineAtts.length === 0) {
+    callback(html);
+    return;
+  }
+
+  var remaining = inlineAtts.length;
+  var replacements = {};
+
+  for (var j = 0; j < inlineAtts.length; j++) {
+    (function (att) {
+      item.getAttachmentContentAsync(att.id, function (result) {
+        if (result.status === Office.AsyncResultStatus.Succeeded) {
+          var dataUrl = "data:" + att.contentType + ";base64," + result.value.content;
+          // Replace cid references — Outlook uses cid:filename or cid:contentId
+          html = html.replace(new RegExp('src=["\']cid:' + escapeRegex(att.name) + '["\']', 'gi'), 'src="' + dataUrl + '"');
+          // Also try matching by content ID (without the name)
+          if (att.id) {
+            html = html.replace(new RegExp('src=["\']cid:[^"\']*' + escapeRegex(att.name.split('.')[0]) + '[^"\']*["\']', 'gi'), 'src="' + dataUrl + '"');
+          }
+        }
+        remaining--;
+        if (remaining === 0) {
+          callback(html);
+        }
+      });
+    })(inlineAtts[j]);
+  }
+}
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function htmlToCleanText(html) {
