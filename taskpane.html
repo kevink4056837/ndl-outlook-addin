@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>NDL Issue Tracker</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #f8fafb;
+      color: #111827;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: #0D2D3A;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header-icon {
+      width: 28px;
+      height: 28px;
+      background: rgba(91, 190, 207, 0.15);
+      border: 1px solid rgba(91, 190, 207, 0.3);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+    .header-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.3px;
+    }
+    .header-sub {
+      font-size: 11px;
+      color: rgba(255,255,255,0.5);
+      font-weight: 500;
+    }
+
+    /* ── Content ── */
+    .content {
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* ── Email preview ── */
+    .email-preview {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 14px;
+    }
+    .email-subject {
+      font-size: 13px;
+      font-weight: 600;
+      color: #111827;
+      margin-bottom: 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .email-from {
+      font-size: 11px;
+      color: #6b7280;
+    }
+    .email-body-preview {
+      font-size: 12px;
+      color: #374151;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #f0f0f0;
+      max-height: 60px;
+      overflow: hidden;
+      line-height: 1.5;
+    }
+
+    /* ── Attachment list from email ── */
+    .email-attachments {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #f0f0f0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .email-att-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      background: #f0faf8;
+      border: 1px solid #ccfbf1;
+      border-radius: 6px;
+      font-size: 11px;
+      color: #065f46;
+    }
+
+    /* ── Form fields ── */
+    .field { display: flex; flex-direction: column; gap: 5px; }
+    .field-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .field-label .req { color: #991b1b; }
+
+    select, input[type="text"], textarea {
+      font-family: inherit;
+      font-size: 13px;
+      padding: 9px 12px;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+      color: #111827;
+      outline: none;
+      background: #fff;
+      transition: border-color 0.15s;
+    }
+    select:focus, input[type="text"]:focus, textarea:focus {
+      border-color: #5bbecf;
+      box-shadow: 0 0 0 3px rgba(91, 190, 207, 0.1);
+    }
+    textarea { resize: vertical; line-height: 1.5; }
+
+    /* ── Toggle: include attachments ── */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+    }
+    .toggle-row label { font-size: 12px; color: #374151; font-weight: 500; }
+    .toggle-switch {
+      position: relative;
+      width: 36px;
+      height: 20px;
+    }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: #d1d5db;
+      border-radius: 20px;
+      transition: 0.2s;
+    }
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      height: 16px;
+      width: 16px;
+      left: 2px;
+      bottom: 2px;
+      background: #fff;
+      border-radius: 50%;
+      transition: 0.2s;
+    }
+    .toggle-switch input:checked + .toggle-slider { background: #0f766e; }
+    .toggle-switch input:checked + .toggle-slider::before { transform: translateX(16px); }
+
+    /* ── Buttons ── */
+    .btn-primary {
+      width: 100%;
+      padding: 11px;
+      border: none;
+      border-radius: 8px;
+      background: #0f766e;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-primary:hover { background: #0d6560; }
+    .btn-primary:disabled { background: #d1d5db; cursor: default; }
+
+    /* ── Status ── */
+    .status {
+      text-align: center;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      display: none;
+    }
+    .status.success { display: block; background: #f0faf8; border: 1px solid #ccfbf1; color: #065f46; }
+    .status.error { display: block; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+    .status.loading { display: block; background: #f0f9ff; border: 1px solid #bae6fd; color: #075985; }
+
+    /* ── Footer ── */
+    .footer {
+      padding: 12px 20px;
+      border-top: 1px solid #f0f0f0;
+      text-align: center;
+    }
+    .footer span {
+      font-size: 10px;
+      color: #9ca3af;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="header-icon">⚡</div>
+    <div>
+      <div class="header-title">Create Issue</div>
+      <div class="header-sub">From email → L10 Issues list</div>
+    </div>
+  </div>
+
+  <div class="content">
+    <!-- Email preview (auto-populated) -->
+    <div class="email-preview">
+      <div class="email-subject" id="emailSubject">Loading email...</div>
+      <div class="email-from" id="emailFrom"></div>
+      <div class="email-body-preview" id="emailBodyPreview"></div>
+      <div class="email-attachments" id="emailAttachments" style="display:none;"></div>
+    </div>
+
+    <!-- Meeting picker -->
+    <div class="field">
+      <label class="field-label">Meeting <span class="req">*</span></label>
+      <select id="meetingSelect">
+        <option value="">Select a meeting...</option>
+        <option value="NDL - Leadership L10">NDL - Leadership L10</option>
+        <option value="NDL - Sales &amp; Marketing L10">NDL - Sales &amp; Marketing L10</option>
+        <option value="NDL - Tech L10">NDL - Tech L10</option>
+        <option value="NDL - Office L10">NDL - Office L10</option>
+        <option value="NDL - Purchasing L10">NDL - Purchasing L10</option>
+        <option value="NDL - Warehouse L10">NDL - Warehouse L10</option>
+      </select>
+    </div>
+
+    <!-- Issue title (defaults to subject, editable) -->
+    <div class="field">
+      <label class="field-label">Issue Title <span class="req">*</span></label>
+      <input type="text" id="issueTitle" placeholder="Issue title..."/>
+    </div>
+
+    <!-- Description (defaults to body snippet, editable) -->
+    <div class="field">
+      <label class="field-label">Description</label>
+      <textarea id="issueDesc" rows="3" placeholder="Add context..."></textarea>
+    </div>
+
+    <!-- Include attachments toggle -->
+    <div class="toggle-row" id="attachToggleRow" style="display:none;">
+      <label>Include email attachments</label>
+      <div class="toggle-switch">
+        <input type="checkbox" id="includeAttachments" checked/>
+        <span class="toggle-slider"></span>
+      </div>
+    </div>
+
+    <!-- Status message -->
+    <div class="status" id="statusMsg"></div>
+
+    <!-- Submit -->
+    <button class="btn-primary" id="submitBtn" disabled>Select a meeting to continue</button>
+  </div>
+
+  <div class="footer">
+    <span>NDL Issue Tracker v1.0 — Northeast Distribution</span>
+  </div>
+
+  <script src="taskpane.js"></script>
+</body>
+</html>
