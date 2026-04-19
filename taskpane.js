@@ -47,11 +47,12 @@ function loadEmailData() {
   // Body (async)
   item.body.getAsync(Office.CoercionType.Text, function (result) {
     if (result.status === Office.AsyncResultStatus.Succeeded) {
-      emailData.bodyText = result.value;
-      var preview = result.value.substring(0, 200);
-      if (result.value.length > 200) preview += "...";
+      var cleaned = cleanEmailBody(result.value);
+      emailData.bodyText = cleaned;
+      var preview = cleaned.substring(0, 200);
+      if (cleaned.length > 200) preview += "...";
       document.getElementById("emailBodyPreview").textContent = preview;
-      document.getElementById("issueDesc").value = result.value.substring(0, 2000);
+      document.getElementById("issueDesc").value = cleaned.substring(0, 2000);
     }
   });
 
@@ -244,6 +245,42 @@ function getFileIcon(filename) {
     gif: "🖼️", zip: "📦", rar: "📦", txt: "📃", csv: "📊",
   };
   return icons[ext] || "📎";
+}
+
+function cleanEmailBody(text) {
+  if (!text) return "";
+  // Split on common reply/forward markers
+  var markers = [
+    /\n\s*From:.*\nSent:.*\nTo:/i,           // Outlook reply header
+    /\n\s*-{2,}\s*Original Message\s*-{2,}/i, // ---- Original Message ----
+    /\n\s*On .+wrote:\s*\n/i,                 // Gmail-style "On ... wrote:"
+    /\nGet Outlook for .*/i,                   // "Get Outlook for Android/iOS"
+    /\n\s*_{10,}/,                             // long underscores (signature divider)
+    /\n\s*-{10,}/,                             // long dashes (signature divider)
+  ];
+  var body = text;
+  for (var i = 0; i < markers.length; i++) {
+    var match = body.search(markers[i]);
+    if (match > 0) {
+      body = body.substring(0, match);
+    }
+  }
+  // Trim signature block — cut at common patterns
+  var sigMarkers = [
+    /\nThanks[,!]?\s*\n.*\|/i,               // "Thanks, Name | Title"
+    /\nRegards[,]?\s*\n/i,
+    /\nBest[,]?\s*\n/i,
+    /\nSent from my /i,
+  ];
+  for (var j = 0; j < sigMarkers.length; j++) {
+    var sigMatch = body.search(sigMarkers[j]);
+    if (sigMatch > 0) {
+      body = body.substring(0, sigMatch);
+    }
+  }
+  // Clean up whitespace
+  body = body.replace(/\r\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  return body;
 }
 
 function formatSize(bytes) {
